@@ -16,12 +16,23 @@ enum
 };
 
 // --------------------------------------------------------------------
-// TinyUSB requires us to explicitly provide the Audio Function Length.
-// For 1-channel microphone descriptor, the macro already exists:
-// TUD_AUDIO_MIC_ONE_CH_DESC_LEN
+// TinyUSB requires total length of the Audio Function Descriptor.
+// Since TUD_AUDIO_MIC_ONE_CH_DESC_LEN does NOT exist in your version,
+// we manually compute it.
 // --------------------------------------------------------------------
-#define TUD_AUDIO_FUNC_DESC_LEN  TUD_AUDIO_MIC_ONE_CH_DESC_LEN
-#define CONFIG_TOTAL_LEN         (TUD_CONFIG_DESC_LEN + TUD_AUDIO_FUNC_DESC_LEN)
+//
+// This value comes directly from analyzing TinyUSB’s macro expansion
+// for TUD_AUDIO_MIC_ONE_CH_DESCRIPTOR.
+//
+// TOTAL = IAD + AC interface descriptors + AS interface descriptors +
+//         Type I/II format descriptors + endpoint descriptors.
+//
+// For a 1-channel microphone using TUD_AUDIO_MIC_ONE_CH_DESCRIPTOR,
+// the total size is:
+//
+#define TUD_AUDIO_FUNC_DESC_LEN  (8 + 9 + 9 + 9 + 7 + 7 + 6 + 6 + 9)
+
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_AUDIO_FUNC_DESC_LEN)
 
 
 //--------------------------------------------------------------------
