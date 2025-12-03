@@ -40,3 +40,7 @@ pico_add_extra_outputs(pico_usb_mic)
 target_include_directories(pico_usb_mic PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
 )
+
+target_include_directories(pico_usb_mic PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}
+)
