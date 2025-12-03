@@ -2,7 +2,7 @@
  * USB Descriptors for Audio Class 1.0 Microphone
  * Makes the Pico W appear as a USB microphone to Quest 2
  */
-
+#define TUD_AUDIO_FUNC_DESC_LEN  (8 + 9 + 9 + 9 + 7 + 7 + 6 + 6 + 9)
 #include "tusb.h"
 
 // --------------------------------------------------------------------
@@ -30,7 +30,7 @@ enum
 // For a 1-channel microphone using TUD_AUDIO_MIC_ONE_CH_DESCRIPTOR,
 // the total size is:
 //
-#define TUD_AUDIO_FUNC_DESC_LEN  (8 + 9 + 9 + 9 + 7 + 7 + 6 + 6 + 9)
+
 
 #define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_AUDIO_FUNC_DESC_LEN)
 
