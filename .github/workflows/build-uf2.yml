@@ -1,0 +1,217 @@
+name: Build and Release Pico W Firmware
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      # Install dependencies
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            build-essential \
+            git \
+            python3
+      
+      # Cache Pico SDK to speed up builds
+      - name: Cache Pico SDK
+        id: cache-pico-sdk
+        uses: actions/cache@v4
+        with:
+          path: pico-sdk
+          key: pico-sdk-${{ hashFiles('.github/workflows/build-release.yml') }}
+      
+      # Clone Pico SDK if not cached
+      - name: Clone Pico SDK
+        if: steps.cache-pico-sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git --depth 1
+          cd pico-sdk
+          git submodule update --init --depth 1
+      
+      # Set environment variable for Pico SDK path
+      - name: Set Pico SDK Path
+        run: echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
+      
+      # Create build directory
+      - name: Create Build Directory
+        run: mkdir -p uf2/build
+      
+      # Configure CMake
+      - name: Configure CMake
+        run: |
+          cd uf2/build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPICO_BOARD=pico_w
+      
+      # Build the firmware
+      - name: Build Firmware
+        run: |
+          cd uf2/build
+          make -j$(nproc)
+      
+      # Verify UF2 file was created
+      - name: Verify Build Output
+        run: |
+          if [ ! -f uf2/build/pico_usb_mic.uf2 ]; then
+            echo "Error: UF2 file not found!"
+            exit 1
+          fi
+          ls -lh uf2/build/pico_usb_mic.*
+      
+      # Get version from release tag
+      - name: Get Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      # Rename UF2 with version
+      - name: Rename Build Artifacts
+        run: |
+          cd uf2/build
+          cp pico_usb_mic.uf2 questomic_${{ steps.get_version.outputs.version }}.uf2
+          cp pico_usb_mic.elf questomic_${{ steps.get_version.outputs.version }}.elf
+          cp pico_usb_mic.bin questomic_${{ steps.get_version.outputs.version }}.bin
+      
+      # Generate build info file
+      - name: Generate Build Info
+        run: |
+          cat > uf2/build/FIRMWARE_INFO.txt << EOF
+          Pico W USB Microphone Firmware
+          ==============================
+          Version: ${{ steps.get_version.outputs.version }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Commit: ${{ github.sha }}
+          Builder: GitHub Actions
+          
+          Files:
+          - questomic_${{ steps.get_version.outputs.version }}.uf2 (Flash this to Pico W)
+          - questomic_${{ steps.get_version.outputs.version }}.elf (Debug symbols)
+          - questomic_${{ steps.get_version.outputs.version }}.bin (Raw binary)
+          
+          Installation:
+          1. Hold BOOTSEL button on Pico W
+          2. Connect to PC via USB
+          3. Copy .uf2 file to RPI-RP2 drive
+          4. Pico W will reboot automatically
+          
+          Configuration:
+          - Edit WIFI_SSID and WIFI_PASSWORD in main.c before building
+          - Default UDP port: 5005
+          - Sample rate: 16kHz mono
+          EOF
+          cat uf2/build/FIRMWARE_INFO.txt
+      
+      # Create checksum file
+      - name: Generate Checksums
+        run: |
+          cd uf2/build
+          sha256sum questomic_${{ steps.get_version.outputs.version }}.* > checksums.txt
+          cat checksums.txt
+      
+      # Upload artifacts (for workflow runs)
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ steps.get_version.outputs.version }}
+          path: |
+            uf2/build/questomic_${{ steps.get_version.outputs.version }}.uf2
+            uf2/build/questomic_${{ steps.get_version.outputs.version }}.elf
+            uf2/build/questomic_${{ steps.get_version.outputs.version }}.bin
+            uf2/build/FIRMWARE_INFO.txt
+            uf2/build/checksums.txt
+          retention-days: 90
+      
+      # Upload to release (only on release trigger)
+      - name: Upload UF2 to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            uf2/build/questomic_${{ steps.get_version.outputs.version }}.uf2
+            uf2/build/questomic_${{ steps.get_version.outputs.version }}.elf
+            uf2/build/FIRMWARE_INFO.txt
+            uf2/build/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Build debug version
+  build-firmware-debug:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential git python3
+      
+      - name: Cache Pico SDK
+        id: cache-pico-sdk
+        uses: actions/cache@v4
+        with:
+          path: pico-sdk
+          key: pico-sdk-${{ hashFiles('.github/workflows/build-release.yml') }}
+      
+      - name: Clone Pico SDK
+        if: steps.cache-pico-sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/raspberrypi/pico-sdk.git --depth 1
+          cd pico-sdk
+          git submodule update --init --depth 1
+      
+      - name: Set Pico SDK Path
+        run: echo "PICO_SDK_PATH=$GITHUB_WORKSPACE/pico-sdk" >> $GITHUB_ENV
+      
+      - name: Build Debug Firmware
+        run: |
+          mkdir -p uf2/build_debug
+          cd uf2/build_debug
+          cmake .. -DPICO_BOARD=pico_w -DCMAKE_BUILD_TYPE=Debug
+          make -j$(nproc)
+      
+      - name: Get Version
+        id: get_version
+        run: echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+      
+      - name: Rename Debug Artifacts
+        run: |
+          cd uf2/build_debug
+          cp pico_usb_mic.uf2 questomic_${{ steps.get_version.outputs.version }}_debug.uf2
+          cp pico_usb_mic.elf questomic_${{ steps.get_version.outputs.version }}_debug.elf
+      
+      - name: Upload Debug Build to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            uf2/build_debug/questomic_${{ steps.get_version.outputs.version }}_debug.uf2
+            uf2/build_debug/questomic_${{ steps.get_version.outputs.version }}_debug.elf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

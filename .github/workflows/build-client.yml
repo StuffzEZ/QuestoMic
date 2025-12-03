@@ -1,0 +1,307 @@
+name: Build Client Application
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Dependencies
+        run: |
+          cd client
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Get Version
+        id: get_version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Build with PyInstaller (Windows)
+        run: |
+          cd client
+          pyinstaller --onefile --noconsole --name "PicoMic-${{ steps.get_version.outputs.version }}-Windows" questomic.py
+      
+      - name: Rename Output
+        shell: bash
+        run: |
+          cd client/dist
+          mv "PicoMic-${{ steps.get_version.outputs.version }}-Windows.exe" "PicoMic-Windows-${{ steps.get_version.outputs.version }}.exe"
+      
+      - name: Generate Client Info
+        shell: bash
+        run: |
+          cat > client/dist/CLIENT_INFO.txt << EOF
+          Pico W USB Microphone - Windows Client
+          =======================================
+          Version: ${{ steps.get_version.outputs.version }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Platform: Windows x64
+          Commit: ${{ github.sha }}
+          
+          Usage:
+          1. Run PicoMic-Windows-${{ steps.get_version.outputs.version }}.exe
+          2. Select your audio input device
+          3. Enter your Pico W's IP address
+          4. Click Start to stream audio
+          
+          Requirements:
+          - Windows 10/11
+          - Pico W on same network
+          - Audio device (microphone or output loopback)
+          EOF
+      
+      - name: Upload Windows Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-windows-${{ steps.get_version.outputs.version }}
+          path: |
+            client/dist/PicoMic-Windows-${{ steps.get_version.outputs.version }}.exe
+            client/dist/CLIENT_INFO.txt
+      
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            client/dist/PicoMic-Windows-${{ steps.get_version.outputs.version }}.exe
+            client/dist/CLIENT_INFO.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev python3-dev
+      
+      - name: Install Python Dependencies
+        run: |
+          cd client
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Get Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Build with PyInstaller (Linux)
+        run: |
+          cd client
+          pyinstaller --onefile --name "PicoMic-${{ steps.get_version.outputs.version }}-Linux" questomic.py
+      
+      - name: Rename Output
+        run: |
+          cd client/dist
+          mv "PicoMic-${{ steps.get_version.outputs.version }}-Linux" "PicoMic-Linux-${{ steps.get_version.outputs.version }}"
+          chmod +x "PicoMic-Linux-${{ steps.get_version.outputs.version }}"
+      
+      - name: Generate Client Info
+        run: |
+          cat > client/dist/CLIENT_INFO_LINUX.txt << EOF
+          Pico W USB Microphone - Linux Client
+          =====================================
+          Version: ${{ steps.get_version.outputs.version }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Platform: Linux x64
+          Commit: ${{ github.sha }}
+          
+          Usage:
+          1. Make executable: chmod +x PicoMic-Linux-${{ steps.get_version.outputs.version }}
+          2. Run: ./PicoMic-Linux-${{ steps.get_version.outputs.version }}
+          3. Select your audio input device
+          4. Enter your Pico W's IP address
+          5. Start streaming
+          
+          Requirements:
+          - Linux (Ubuntu 20.04+ recommended)
+          - PortAudio library (install: sudo apt install portaudio19-dev)
+          - PulseAudio or ALSA
+          - Pico W on same network
+          EOF
+      
+      - name: Upload Linux Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-linux-${{ steps.get_version.outputs.version }}
+          path: |
+            client/dist/PicoMic-Linux-${{ steps.get_version.outputs.version }}
+            client/dist/CLIENT_INFO_LINUX.txt
+      
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            client/dist/PicoMic-Linux-${{ steps.get_version.outputs.version }}
+            client/dist/CLIENT_INFO_LINUX.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install System Dependencies
+        run: |
+          brew install portaudio
+      
+      - name: Install Python Dependencies
+        run: |
+          cd client
+          pip install -r requirements.txt
+          pip install pyinstaller
+      
+      - name: Get Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Build with PyInstaller (macOS)
+        run: |
+          cd client
+          pyinstaller --onefile --windowed --name "PicoMic-${{ steps.get_version.outputs.version }}-macOS" questomic.py
+      
+      - name: Rename Output
+        run: |
+          cd client/dist
+          mv "PicoMic-${{ steps.get_version.outputs.version }}-macOS" "PicoMic-macOS-${{ steps.get_version.outputs.version }}"
+          chmod +x "PicoMic-macOS-${{ steps.get_version.outputs.version }}"
+      
+      - name: Generate Client Info
+        run: |
+          cat > client/dist/CLIENT_INFO_MACOS.txt << EOF
+          Pico W USB Microphone - macOS Client
+          =====================================
+          Version: ${{ steps.get_version.outputs.version }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Platform: macOS (Universal)
+          Commit: ${{ github.sha }}
+          
+          Usage:
+          1. Run: ./PicoMic-macOS-${{ steps.get_version.outputs.version }}
+          2. Select your audio input device
+          3. Enter your Pico W's IP address
+          4. Start streaming
+          
+          Requirements:
+          - macOS 10.15 (Catalina) or later
+          - Microphone permissions (System Preferences → Security & Privacy)
+          - Pico W on same network
+          
+          Note: For output capture, install Blackhole or Soundflower
+          EOF
+      
+      - name: Upload macOS Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-macos-${{ steps.get_version.outputs.version }}
+          path: |
+            client/dist/PicoMic-macOS-${{ steps.get_version.outputs.version }}
+            client/dist/CLIENT_INFO_MACOS.txt
+      
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            client/dist/PicoMic-macOS-${{ steps.get_version.outputs.version }}
+            client/dist/CLIENT_INFO_MACOS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-release-summary:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux, build-macos]
+    if: github.event_name == 'release'
+    
+    steps:
+      - name: Create Release Summary Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ github.event.release.tag_name }}';
+            const body = `## 🎉 Client Builds Complete!
+            
+            ### Available Downloads
+            
+            | Platform | File | Notes |
+            |----------|------|-------|
+            | 🪟 Windows | \`PicoMic-Windows-${version}.exe\` | Windows 10/11 (x64) |
+            | 🐧 Linux | \`PicoMic-Linux-${version}\` | Ubuntu 20.04+ recommended |
+            | 🍎 macOS | \`PicoMic-macOS-${version}\` | macOS 10.15+ |
+            
+            ### Quick Start
+            1. Download the client for your platform
+            2. Download the firmware (\`pico_usb_mic_${version}.uf2\`)
+            3. Flash firmware to Pico W (hold BOOTSEL button)
+            4. Run the client application
+            5. Enter Pico W IP address and start streaming
+            
+            ### Build Info
+            - 🔨 Commit: ${{ github.sha }}
+            - 📅 Built: ${new Date().toUTCString()}
+            - ✅ All platforms built successfully
+            
+            For detailed instructions, see the README.md`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.payload.release.id,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

@@ -1,0 +1,20 @@
+# Pico W USB Microphone Client - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Audio processing
+sounddevice==0.4.6
+numpy==1.24.3
+pyaudio==0.2.14
+
+# Network
+# (built-in socket module - no external dependency)
+
+# GUI (optional - uncomment if you want to build a GUI version)
+# tkinter is built-in on most Python installations
+# PyQt5==5.15.10
+# PySide6==6.6.0
+
+# Platform-specific audio backends
+# Windows: No additional requirements (uses WASAPI)
+# Linux: Requires portaudio19-dev (install via apt: sudo apt install portaudio19-dev)
+# macOS: Requires portaudio (install via brew: brew install portaudio)
