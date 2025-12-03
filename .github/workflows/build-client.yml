@@ -40,7 +40,7 @@ jobs:
       - name: Build with PyInstaller (Windows)
         run: |
           cd client
-          pyinstaller --onefile --noconsole --name "PicoMic-${{ steps.get_version.outputs.version }}-Windows" questomic.py
+          pyinstaller --onefile --name "PicoMic-${{ steps.get_version.outputs.version }}-Windows" questomic.py
       
       - name: Rename Output
         shell: bash
@@ -214,7 +214,7 @@ jobs:
       - name: Build with PyInstaller (macOS)
         run: |
           cd client
-          pyinstaller --onefile --windowed --name "PicoMic-${{ steps.get_version.outputs.version }}-macOS" questomic.py
+          pyinstaller --onefile --name "PicoMic-${{ steps.get_version.outputs.version }}-macOS" questomic.py
       
       - name: Rename Output
         run: |
